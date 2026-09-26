@@ -1,14 +1,16 @@
 #include <iostream>
 #include <cmath>
 #include <cstdlib>
-#include "dGSpace.hpp"
+// #include "dGSpace.hpp"
 // #include "finite_element.hpp"
+#include "computeSolution.hpp"
 #include "legendre_polynomial.hpp"
 #include "tchebychev_polynomial.hpp"
-#include "mesh_1d.hpp"
-#include "gauss_integrator.hpp"
+// #include "mesh_1d.hpp"
+// #include "gauss_integrator.hpp"
 #include "solver.hpp"
 #include "output_writer.hpp"
+#include "convergence.hpp"
 
 double f(double x)
 {
@@ -18,11 +20,6 @@ double f(double x)
 double gauss_bell(double x)
 {
     return -std::exp(- x * x);
-}
-
-double log(double x)
-{
-    return std::log(std::abs(x));
 }
 
 double absolute(double x)
@@ -42,6 +39,15 @@ double polynome(double x)
     return x*x;
 }
 
+double u_exact(double x)
+{
+    return (x*x - 100)*x*x*x;
+}
+
+double load(double x)
+{
+    return - 20 *x*x*x + 600*x;
+}
 
 int main()
 {
@@ -259,37 +265,68 @@ int main()
 
     //---------------------------------Résolution problème de Poisson----------------------------
 
+    // // Paramètres :
+    // double x_left = -10;
+    // double x_right = 10;
+    // size_t n_cells = 1000;
+    // size_t order = 6;
+    // // double penalty = 10.;
+
+    // // // Conditions de Dirichlet :
+    // double g_l = 0;
+    // double g_r = 0;
+
+    // Maillage, espace et quadrature :
+    // mesh<double> msh(x_left,x_right,n_cells);
+    // dGSpace<LegendrePolynomial,double> FEM(order,msh);
+    // gauss_integrator gauss(-1,1,nullptr);
+
+    // // Définition du problème :
+    // Eigen::SparseMatrix<double> StiffnessMatrix = FEM.assembleSIPMatrix(gauss,penalty);
+    // Eigen::VectorXd LoadVector = FEM.assembleLoadVector(gauss_bell,gauss);
+    // FEM.applyDirichletCondition(LoadVector,penalty,g_l,g_r);
+    // // std::cout << "||load|| = " << LoadVector.norm() << std::endl;
+    // // std::cout << "sum load = " << LoadVector.sum() << std::endl;
+
+    // // Résolution :
+    // std::string method = "LU";
+    // LinearSolver Solver(StiffnessMatrix,method);
+    // std::vector<double> solution = Solver.solve(LoadVector);
+
+    // // Export :
+    // output_writer<LegendrePolynomial,double> output(msh,"Poisson");
+    // output.write_solution(solution,FEM,"solution");
+
+
     // Paramètres :
     double x_left = -10;
     double x_right = 10;
-    size_t n_cells = 1000;
-    size_t order = 6;
-    double penalty = 10.;
+    size_t n_cells = 20;
+    size_t order = 1;
 
     // Conditions de Dirichlet :
     double g_l = 0;
     double g_r = 0;
 
-    // Maillage, espace et quadrature :
+    // Maillage & espace dG :
     mesh<double> msh(x_left,x_right,n_cells);
     dGSpace<LegendrePolynomial,double> FEM(order,msh);
-    gauss_integrator gauss(-1,1,nullptr);
 
-    // Définition du problème :
-    Eigen::SparseMatrix<double> StiffnessMatrix = FEM.assembleSIPMatrix(gauss,penalty);
-    Eigen::VectorXd LoadVector = FEM.assembleLoadVector(gauss_bell,gauss);
-    FEM.applyDirichletCondition(LoadVector,penalty,g_l,g_r);
-    // std::cout << "||load|| = " << LoadVector.norm() << std::endl;
-    // std::cout << "sum load = " << LoadVector.sum() << std::endl;
-
-    // Résolution :
+    // Méthode système linéaire :
     std::string method = "LU";
-    LinearSolver Solver(StiffnessMatrix,method);
-    std::vector<double> solution = Solver.solve(LoadVector);
 
-    // Export :
-    output_writer<LegendrePolynomial,double> output(msh,"Poisson");
+    // Résolution
+    std::vector<double> solution = computeSolution<LegendrePolynomial,double>(FEM,load,method,g_l,g_r);
+
+    // Export
+    output_writer<LegendrePolynomial,double> output(FEM.getMesh(),"Poisson");
     output.write_solution(solution,FEM,"solution");
+
+
+    size_t nb_raf = 5;
+
+    convergence<tchebychevPolynomial, double> conv(u_exact,msh,order,g_l,g_r,load,method,nb_raf);
+    conv.compute_L2_error();
 
 
     return 0;
